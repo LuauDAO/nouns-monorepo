@@ -36,7 +36,7 @@ const encode = async () => {
   for (const folder of partfolders) {
     const folderpath = path.join(__dirname, '../images', folder);
     const files = await fs.readdir(folderpath);
-    for (const file of files) {
+    for (const file of files.filter(x => x.includes('.png'))) {
       const image = await readPngImage(path.join(folderpath, file));
       encoder.encodeImage(file.replace(/\.png$/, ''), image, folder.replace(/^\d-/, ''));
     }
