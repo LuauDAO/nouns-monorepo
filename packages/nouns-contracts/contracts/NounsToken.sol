@@ -24,6 +24,7 @@ import { INounsSeeder } from './interfaces/INounsSeeder.sol';
 import { INounsToken } from './interfaces/INounsToken.sol';
 import { ERC721 } from './base/ERC721.sol';
 import { IERC721 } from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
+import '@openzeppelin/contracts/utils/cryptography/MerkleProof.sol';
 import { IProxyRegistry } from './external/opensea/IProxyRegistry.sol';
 
 contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
@@ -32,6 +33,15 @@ contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
 
     // An address who has permissions to mint Nouns
     address public minter;
+
+    // Mint fee
+    uint256 public mintFee;
+
+    // Merkle root
+    bytes32 public root;
+
+    // Claims from merkle drop
+    mapping(address => bool) merkleClaims;
 
     // The Nouns token URI descriptor
     INounsDescriptor public descriptor;
@@ -103,12 +113,16 @@ contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
     constructor(
         address _noundersDAO,
         address _minter,
+        uint256 _mintFee,
+        bytes32 _root,
         INounsDescriptor _descriptor,
         INounsSeeder _seeder,
         IProxyRegistry _proxyRegistry
-    ) ERC721('Nouns', 'NOUN') {
+    ) ERC721('BeachBums', 'BUMS') {
         noundersDAO = _noundersDAO;
         minter = _minter;
+        mintFee = _mintFee;
+        root = _root;
         descriptor = _descriptor;
         seeder = _seeder;
         proxyRegistry = _proxyRegistry;
@@ -141,24 +155,30 @@ contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
     }
 
     /**
-     * @notice Mint a Noun to the minter, along with a possible nounders reward
-     * Noun. Nounders reward Nouns are minted every 10 Nouns, starting at 0,
-     * until 183 nounder Nouns have been minted (5 years w/ 24 hour auctions).
+     * @notice Mint a Noun to address
      * @dev Call _mintTo with the to address(es).
      */
-    function mint() public override onlyMinter returns (uint256) {
-        if (_currentNounId <= 1820 && _currentNounId % 10 == 0) {
-            _mintTo(noundersDAO, _currentNounId++);
-        }
-        return _mintTo(minter, _currentNounId++);
+    function mint(address account) public payable override returns (uint256) {
+        require(msg.value >= mintFee, 'Insufficient mint fee');
+        return _mintTo(account, _currentNounId++);
     }
 
     /**
-     * @notice Burn a noun.
+     * @notice Mint a Noun to address in merkle drop
      */
-    function burn(uint256 nounId) public override onlyMinter {
-        _burn(nounId);
-        emit NounBurned(nounId);
+    function redeem(address account, bytes32[] calldata proof) public override returns (uint256) {
+        require(_verify(_leaf(account), proof), 'Invalid merkle proof');
+        require(!merkleClaims[account], 'Already claimed');
+        merkleClaims[account] = true;
+        return _mintTo(account, _currentNounId++);
+    }
+
+    function _leaf(address account) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(account));
+    }
+
+    function _verify(bytes32 leaf, bytes32[] memory proof) internal view returns (bool) {
+        return MerkleProof.verify(proof, root, leaf);
     }
 
     /**
@@ -177,6 +197,14 @@ contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
     function dataURI(uint256 tokenId) public view override returns (string memory) {
         require(_exists(tokenId), 'NounsToken: URI query for nonexistent token');
         return descriptor.dataURI(tokenId, seeds[tokenId]);
+    }
+
+    /**
+     * @notice Set merkle root
+     * @dev Only callable by minter
+     */
+    function setRoot(bytes32 merkleRoot) external override onlyMinter {
+        root = merkleRoot;
     }
 
     /**

@@ -3,8 +3,11 @@ import { ethers } from 'hardhat';
 import { BigNumber as EthersBN, constants } from 'ethers';
 import { solidity } from 'ethereum-waffle';
 import { NounsDescriptor__factory as NounsDescriptorFactory, NounsToken } from '../typechain';
-import { deployNounsToken, populateDescriptor } from './utils';
+import { deployNounsToken, populateDescriptor, hashAccount } from './utils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { override } from 'prompt';
+import { MerkleTree } from 'merkletreejs';
+import keccack256 from 'keccak256';
 
 chai.use(solidity);
 const { expect } = chai;
@@ -13,11 +16,17 @@ describe('NounsToken', () => {
   let nounsToken: NounsToken;
   let deployer: SignerWithAddress;
   let noundersDAO: SignerWithAddress;
+  let merkleRecipients: SignerWithAddress[];
+  let merkleTree: MerkleTree;
   let snapshotId: number;
 
   before(async () => {
     [deployer, noundersDAO] = await ethers.getSigners();
-    nounsToken = await deployNounsToken(deployer, noundersDAO.address, deployer.address);
+    merkleRecipients = (await ethers.getSigners()).slice(2, 52);
+
+    merkleTree = new MerkleTree(merkleRecipients.map(account => hashAccount(account)), keccack256, {sortPairs: true});
+
+    nounsToken = await deployNounsToken(deployer, noundersDAO.address, deployer.address, "0.1", merkleTree.getHexRoot());
 
     const descriptor = await nounsToken.descriptor();
 
@@ -32,83 +41,77 @@ describe('NounsToken', () => {
     await ethers.provider.send('evm_revert', [snapshotId]);
   });
 
-  it('should allow the minter to mint a noun to itself and a reward noun to the noundersDAO', async () => {
-    const receipt = await (await nounsToken.mint()).wait();
-
-    const [, , , noundersNounCreated, , , , ownersNounCreated] = receipt.events || [];
-
-    expect(await nounsToken.ownerOf(0)).to.eq(noundersDAO.address);
-    expect(noundersNounCreated?.event).to.eq('NounCreated');
-    expect(noundersNounCreated?.args?.tokenId).to.eq(0);
-    expect(noundersNounCreated?.args?.seed.length).to.equal(5);
-
-    expect(await nounsToken.ownerOf(1)).to.eq(deployer.address);
-    expect(ownersNounCreated?.event).to.eq('NounCreated');
-    expect(ownersNounCreated?.args?.tokenId).to.eq(1);
-    expect(ownersNounCreated?.args?.seed.length).to.equal(5);
-
-    noundersNounCreated?.args?.seed.forEach((item: EthersBN | number) => {
-      const value = typeof item !== 'number' ? item?.toNumber() : item;
-      expect(value).to.be.a('number');
-    });
-
-    ownersNounCreated?.args?.seed.forEach((item: EthersBN | number) => {
-      const value = typeof item !== 'number' ? item?.toNumber() : item;
-      expect(value).to.be.a('number');
-    });
-  });
-
   it('should set symbol', async () => {
-    expect(await nounsToken.symbol()).to.eq('NOUN');
+    expect(await nounsToken.symbol()).to.eq('BUMS');
   });
 
   it('should set name', async () => {
-    expect(await nounsToken.name()).to.eq('Nouns');
+    expect(await nounsToken.name()).to.eq('BeachBums');
   });
 
   it('should allow minter to mint a noun to itself', async () => {
-    await (await nounsToken.mint()).wait();
-
-    const receipt = await (await nounsToken.mint()).wait();
-    const nounCreated = receipt.events?.[3];
-
-    expect(await nounsToken.ownerOf(2)).to.eq(deployer.address);
-    expect(nounCreated?.event).to.eq('NounCreated');
-    expect(nounCreated?.args?.tokenId).to.eq(2);
-    expect(nounCreated?.args?.seed.length).to.equal(5);
-
-    nounCreated?.args?.seed.forEach((item: EthersBN | number) => {
-      const value = typeof item !== 'number' ? item?.toNumber() : item;
-      expect(value).to.be.a('number');
-    });
+    const tx = nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()});
+    
+    await expect(tx).to.emit(nounsToken, 'NounCreated');
+    expect(await nounsToken.ownerOf(0)).to.eq(deployer.address);
   });
 
-  it('should emit two transfer logs on mint', async () => {
-    const [, , creator, minter] = await ethers.getSigners();
+  it('should allow merkle drop recipient to public mint a noun to itself', async () => {
+    const recipient = merkleRecipients[0];
 
-    await (await nounsToken.mint()).wait();
+    await nounsToken.connect(recipient).redeem(recipient.address, merkleTree.getHexProof(hashAccount(recipient)));
 
-    await (await nounsToken.setMinter(minter.address)).wait();
-    await (await nounsToken.transferOwnership(creator.address)).wait();
-
-    const tx = nounsToken.connect(minter).mint();
-
-    await expect(tx)
-      .to.emit(nounsToken, 'Transfer')
-      .withArgs(constants.AddressZero, creator.address, 2);
-    await expect(tx).to.emit(nounsToken, 'Transfer').withArgs(creator.address, minter.address, 2);
+    const tx = nounsToken.connect(recipient).mint(recipient.address, {value: await nounsToken.mintFee()});
+    
+    await expect(tx).to.emit(nounsToken, 'NounCreated');
+    expect(await nounsToken.ownerOf(1)).to.eq(recipient.address);
   });
+
+  it('should allow merkle drop recipient to redeem a noun to itself', async () => {
+    const recipient = merkleRecipients[0];
+    const tx = nounsToken.connect(recipient).redeem(recipient.address, merkleTree.getHexProof(hashAccount(recipient)));
+    
+    await expect(tx).to.emit(nounsToken, 'NounCreated');
+    expect(await nounsToken.ownerOf(0)).to.eq(recipient.address);
+  });
+
+  it('should fail to redeem a noun more than once', async () => {
+    const recipient = merkleRecipients[0];
+    const tx = nounsToken.connect(recipient).redeem(recipient.address, merkleTree.getHexProof(hashAccount(recipient)));
+    
+    await expect(tx).to.emit(nounsToken, 'NounCreated');
+    expect(await nounsToken.ownerOf(0)).to.eq(recipient.address);
+
+    const tx2 = nounsToken.connect(recipient).redeem(recipient.address, merkleTree.getHexProof(hashAccount(recipient)));
+
+    await expect(tx2).to.be.revertedWith("Already claimed")
+  });
+
+  it('should fail to mint when not enough fee', async () => {
+    await expect(nounsToken.mint(deployer.address)).to.be.revertedWith("Insufficient mint fee");
+  });
+
+  // it('should emit two transfer logs on mint', async () => {
+  //   const [, , creator, minter] = await ethers.getSigners();
+
+  //   await (await nounsToken.mint(deployer.address)).wait();
+
+  //   await (await nounsToken.setMinter(minter.address)).wait();
+  //   await (await nounsToken.transferOwnership(creator.address)).wait();
+
+  //   const tx = nounsToken.connect(minter).mint(minter.address);
+
+  //   await expect(tx)
+  //     .to.emit(nounsToken, 'Transfer')
+  //     .withArgs(constants.AddressZero, creator.address, 2);
+  //   await expect(tx).to.emit(nounsToken, 'Transfer').withArgs(creator.address, minter.address, 2);
+  // });
 
   it('should allow minter to burn a noun', async () => {
-    await (await nounsToken.mint()).wait();
+    await (await nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()})).wait();
 
     const tx = nounsToken.burn(0);
     await expect(tx).to.emit(nounsToken, 'NounBurned').withArgs(0);
-  });
-
-  it('should revert on non-minter mint', async () => {
-    const account0AsNounErc721Account = nounsToken.connect(noundersDAO);
-    await expect(account0AsNounErc721Account.mint()).to.be.reverted;
   });
 
   describe('contractURI', async () => {

@@ -13,6 +13,7 @@ import {
 import ImageData from '../files/image-data.json';
 import { Block } from '@ethersproject/abstract-provider';
 import { chunkArray } from '../utils';
+import { BytesLike } from 'ethers';
 
 export type TestSigners = {
   deployer: SignerWithAddress;
@@ -30,6 +31,10 @@ export const getSigners = async (): Promise<TestSigners> => {
     account2,
   };
 };
+
+export const hashAccount = (account: SignerWithAddress) => {
+  return Buffer.from(ethers.utils.solidityKeccak256(['address'], [account.address]).slice(2), 'hex');
+}
 
 export const deployNounsDescriptor = async (
   deployer?: SignerWithAddress,
@@ -57,6 +62,8 @@ export const deployNounsToken = async (
   deployer?: SignerWithAddress,
   noundersDAO?: string,
   minter?: string,
+  mintFee?: string,
+  root?: string,
   descriptor?: string,
   seeder?: string,
   proxyRegistryAddress?: string,
@@ -67,6 +74,8 @@ export const deployNounsToken = async (
   return factory.deploy(
     noundersDAO || signer.address,
     minter || signer.address,
+    ethers.utils.parseEther(mintFee || "0.1"),
+    root || ethers.utils.formatBytes32String(""),
     descriptor || (await deployNounsDescriptor(signer)).address,
     seeder || (await deployNounsSeeder(signer)).address,
     proxyRegistryAddress || address(0),
@@ -107,7 +116,7 @@ export const MintNouns = (
 ): ((amount: number) => Promise<void>) => {
   return async (amount: number): Promise<void> => {
     for (let i = 0; i < amount; i++) {
-      await token.mint();
+      await token.mint(address(0));
     }
     if (!burnNoundersTokens) return;
 
@@ -123,7 +132,7 @@ export const setTotalSupply = async (token: NounsToken, newTotalSupply: number):
 
   if (totalSupply < newTotalSupply) {
     for (let i = 0; i < newTotalSupply - totalSupply; i++) {
-      await token.mint();
+      await token.mint(address(0));
     }
     // If Nounder's reward tokens were minted totalSupply will be more than expected, so run setTotalSupply again to burn extra tokens
     await setTotalSupply(token, newTotalSupply);

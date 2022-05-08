@@ -40,11 +40,13 @@ interface INounsToken is IERC721 {
 
     event SeederLocked();
 
-    function mint() external returns (uint256);
+    function mint(address account) external payable returns (uint256);
 
-    function burn(uint256 tokenId) external;
+    function redeem(address account, bytes32[] calldata proof) external returns (uint256);
 
     function dataURI(uint256 tokenId) external returns (string memory);
+
+    function setRoot(bytes32 merkleRoot) external;
 
     function setNoundersDAO(address noundersDAO) external;
 
