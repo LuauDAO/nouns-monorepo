@@ -22,7 +22,7 @@ describe('NounsToken', () => {
 
   before(async () => {
     [deployer, noundersDAO] = await ethers.getSigners();
-    merkleRecipients = (await ethers.getSigners()).slice(2, 52);
+    merkleRecipients = (await ethers.getSigners()).slice(2, 6);
 
     merkleTree = new MerkleTree(merkleRecipients.map(account => hashAccount(account)), keccack256, {sortPairs: true});
 
@@ -49,6 +49,15 @@ describe('NounsToken', () => {
     expect(await nounsToken.name()).to.eq('BeachBums');
   });
 
+  it('should set merkle root', async () => {
+    const newMerkleTree = new MerkleTree(merkleRecipients.slice(2).map(account => hashAccount(account)), keccack256, {sortPairs: true})
+    let oldRoot = await nounsToken.root();
+    await nounsToken.setRoot(newMerkleTree.getHexRoot());
+    let newRoot = await nounsToken.root();
+    expect(newRoot).to.not.eq(oldRoot);
+    expect(newRoot).to.eq(newMerkleTree.getHexRoot());
+  });
+
   it('should allow minter to mint a noun to itself', async () => {
     const tx = nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()});
     
@@ -59,7 +68,7 @@ describe('NounsToken', () => {
   it('should allow merkle drop recipient to public mint a noun to itself', async () => {
     const recipient = merkleRecipients[0];
 
-    await nounsToken.connect(recipient).redeem(recipient.address, merkleTree.getHexProof(hashAccount(recipient)));
+    await (await nounsToken.connect(recipient).redeem(recipient.address, merkleTree.getHexProof(hashAccount(recipient)))).wait();
 
     const tx = nounsToken.connect(recipient).mint(recipient.address, {value: await nounsToken.mintFee()});
     
@@ -73,6 +82,14 @@ describe('NounsToken', () => {
     
     await expect(tx).to.emit(nounsToken, 'NounCreated');
     expect(await nounsToken.ownerOf(0)).to.eq(recipient.address);
+  });
+
+  it('should fail to redeem with invalid proof', async () => {
+    const recipient = merkleRecipients[0];
+    const newMerkleTree = new MerkleTree(merkleRecipients.slice(-2).map(account => hashAccount(account)), keccack256, {sortPairs: true});
+    const tx = nounsToken.connect(recipient).redeem(recipient.address, newMerkleTree.getHexProof(hashAccount(recipient)));
+
+    await expect(tx).to.be.revertedWith("Invalid proof")
   });
 
   it('should fail to redeem a noun more than once', async () => {
@@ -91,6 +108,23 @@ describe('NounsToken', () => {
     await expect(nounsToken.mint(deployer.address)).to.be.revertedWith("Insufficient mint fee");
   });
 
+  it('should allow updated merkle drop recipient to redeem a noun to itself', async () => {
+    const newRecipients = (await ethers.getSigners()).slice(6, 10);
+    const recipient = newRecipients[0];
+    const newMerkleTree = new MerkleTree(newRecipients.map(account => hashAccount(account)), keccack256, {sortPairs: true});
+
+    const tx = nounsToken.connect(recipient).redeem(recipient.address, newMerkleTree.getHexProof(hashAccount(recipient)));
+
+    await expect(tx).to.be.revertedWith('Invalid proof');
+
+    await (await nounsToken.setRoot(newMerkleTree.getHexRoot())).wait();
+
+    const tx2 = nounsToken.connect(recipient).redeem(recipient.address, newMerkleTree.getHexProof(hashAccount(recipient)));
+    
+    await expect(tx2).to.emit(nounsToken, 'NounCreated');
+    expect(await nounsToken.ownerOf(0)).to.eq(recipient.address);
+  });
+
   // it('should emit two transfer logs on mint', async () => {
   //   const [, , creator, minter] = await ethers.getSigners();
 
@@ -106,13 +140,6 @@ describe('NounsToken', () => {
   //     .withArgs(constants.AddressZero, creator.address, 2);
   //   await expect(tx).to.emit(nounsToken, 'Transfer').withArgs(creator.address, minter.address, 2);
   // });
-
-  it('should allow minter to burn a noun', async () => {
-    await (await nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()})).wait();
-
-    const tx = nounsToken.burn(0);
-    await expect(tx).to.emit(nounsToken, 'NounBurned').withArgs(0);
-  });
 
   describe('contractURI', async () => {
     it('should return correct contractURI', async () => {

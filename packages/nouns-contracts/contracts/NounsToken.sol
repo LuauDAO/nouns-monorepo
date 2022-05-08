@@ -167,7 +167,7 @@ contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
      * @notice Mint a Noun to address in merkle drop
      */
     function redeem(address account, bytes32[] calldata proof) public override returns (uint256) {
-        require(_verify(_leaf(account), proof), 'Invalid merkle proof');
+        require(_verify(_leaf(account), proof), 'Invalid proof');
         require(!merkleClaims[account], 'Already claimed');
         merkleClaims[account] = true;
         return _mintTo(account, _currentNounId++);
@@ -205,6 +205,14 @@ contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
      */
     function setRoot(bytes32 merkleRoot) external override onlyMinter {
         root = merkleRoot;
+    }
+
+    /**
+     * @notice Set mint fee
+     * @dev Only callable by minter
+     */
+    function setMintFee(uint256 fee) external override onlyMinter {
+        mintFee = fee;
     }
 
     /**

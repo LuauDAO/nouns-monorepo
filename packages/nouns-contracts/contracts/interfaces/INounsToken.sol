@@ -48,6 +48,8 @@ interface INounsToken is IERC721 {
 
     function setRoot(bytes32 merkleRoot) external;
 
+    function setMintFee(uint256 fee) external;
+
     function setNoundersDAO(address noundersDAO) external;
 
     function setMinter(address minter) external;
