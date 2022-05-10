@@ -28,10 +28,7 @@ import '@openzeppelin/contracts/utils/cryptography/MerkleProof.sol';
 import { IProxyRegistry } from './external/opensea/IProxyRegistry.sol';
 
 contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
-    // The nounders DAO address (creators org)
-    address public noundersDAO;
-
-    // An address who has permissions to mint Nouns
+    // An address who has admin permissions
     address public admin;
 
     // Mint fee
