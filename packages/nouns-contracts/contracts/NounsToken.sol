@@ -18,7 +18,7 @@
 pragma solidity ^0.8.6;
 
 import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
-import { ERC721Checkpointable } from './base/ERC721Checkpointable.sol';
+import { ERC721Enumerable } from './base/ERC721Enumerable.sol';
 import { INounsDescriptor } from './interfaces/INounsDescriptor.sol';
 import { INounsSeeder } from './interfaces/INounsSeeder.sol';
 import { INounsToken } from './interfaces/INounsToken.sol';
@@ -27,18 +27,24 @@ import { IERC721 } from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 import '@openzeppelin/contracts/utils/cryptography/MerkleProof.sol';
 import { IProxyRegistry } from './external/opensea/IProxyRegistry.sol';
 
-contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
+contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
     // The nounders DAO address (creators org)
     address public noundersDAO;
 
     // An address who has permissions to mint Nouns
-    address public minter;
+    address public admin;
 
     // Mint fee
     uint256 public mintFee;
 
+    // Max supply
+    uint256 public immutable maxSupply;
+
     // Merkle root
     bytes32 public root;
+
+    // Number of accounts in merkle drop
+    uint256 public merkleQuantity;
 
     // Claims from merkle drop
     mapping(address => bool) merkleClaims;
@@ -49,14 +55,8 @@ contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
     // The Nouns token seeder
     INounsSeeder public seeder;
 
-    // Whether the minter can be updated
-    bool public isMinterLocked;
-
-    // Whether the descriptor can be updated
-    bool public isDescriptorLocked;
-
-    // Whether the seeder can be updated
-    bool public isSeederLocked;
+    // Whether the admin can be updated
+    bool public isAdminLocked;
 
     // The noun seeds
     mapping(uint256 => INounsSeeder.Seed) public seeds;
@@ -71,58 +71,36 @@ contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
     IProxyRegistry public immutable proxyRegistry;
 
     /**
-     * @notice Require that the minter has not been locked.
+     * @notice Require that the admin has not been locked.
      */
-    modifier whenMinterNotLocked() {
-        require(!isMinterLocked, 'Minter is locked');
+    modifier whenAdminNotLocked() {
+        require(!isAdminLocked, 'Admin is locked');
         _;
     }
 
     /**
-     * @notice Require that the descriptor has not been locked.
+     * @notice Require that the sender is the admin.
      */
-    modifier whenDescriptorNotLocked() {
-        require(!isDescriptorLocked, 'Descriptor is locked');
-        _;
-    }
-
-    /**
-     * @notice Require that the seeder has not been locked.
-     */
-    modifier whenSeederNotLocked() {
-        require(!isSeederLocked, 'Seeder is locked');
-        _;
-    }
-
-    /**
-     * @notice Require that the sender is the nounders DAO.
-     */
-    modifier onlyNoundersDAO() {
-        require(msg.sender == noundersDAO, 'Sender is not the nounders DAO');
-        _;
-    }
-
-    /**
-     * @notice Require that the sender is the minter.
-     */
-    modifier onlyMinter() {
-        require(msg.sender == minter, 'Sender is not the minter');
+    modifier onlyAdmin() {
+        require(msg.sender == admin, 'Sender is not the admin');
         _;
     }
 
     constructor(
-        address _noundersDAO,
-        address _minter,
+        address _admin,
         uint256 _mintFee,
+        uint256 _maxSupply,
         bytes32 _root,
+        uint256 _merkleQuantity,
         INounsDescriptor _descriptor,
         INounsSeeder _seeder,
         IProxyRegistry _proxyRegistry
     ) ERC721('BeachBums', 'BUMS') {
-        noundersDAO = _noundersDAO;
-        minter = _minter;
+        admin = _admin;
         mintFee = _mintFee;
+        maxSupply = _maxSupply;
         root = _root;
+        merkleQuantity = _merkleQuantity;
         descriptor = _descriptor;
         seeder = _seeder;
         proxyRegistry = _proxyRegistry;
@@ -160,7 +138,22 @@ contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
      */
     function mint(address account) public payable override returns (uint256) {
         require(msg.value >= mintFee, 'Insufficient mint fee');
+        require(_currentNounId + merkleQuantity < maxSupply, 'Max supply reached');
         return _mintTo(account, _currentNounId++);
+    }
+
+    /**
+     * @notice Mint multiple Nouns to address
+     * @dev Call _mintTo with the to address(es).
+     */
+    function mintBatch(address account, uint256 quantity) public payable override returns (uint256, uint256) {
+        require(msg.value >= mintFee * quantity, 'Insufficient mint fee');
+        require(_currentNounId + quantity + merkleQuantity < maxSupply, 'Max supply reached');
+        uint256 startId = _currentNounId;
+        for (uint256 i = 0; i < quantity; i++) {
+            _mintTo(account, _currentNounId++);
+        }
+        return (startId, _currentNounId - 1);
     }
 
     /**
@@ -168,6 +161,7 @@ contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
      */
     function redeem(address account, bytes32[] calldata proof) public override returns (uint256) {
         require(_verify(_leaf(account), proof), 'Invalid proof');
+        require(_currentNounId < maxSupply, 'Max supply reached');
         require(!merkleClaims[account], 'Already claimed');
         merkleClaims[account] = true;
         return _mintTo(account, _currentNounId++);
@@ -201,88 +195,39 @@ contract NounsToken is INounsToken, Ownable, ERC721Checkpointable {
 
     /**
      * @notice Set merkle root
-     * @dev Only callable by minter
+     * @dev Only callable by admin
      */
-    function setRoot(bytes32 merkleRoot) external override onlyMinter {
+    function setRoot(bytes32 merkleRoot, uint256 quantity) external override onlyAdmin whenAdminNotLocked {
         root = merkleRoot;
+        merkleQuantity = quantity;
     }
 
     /**
      * @notice Set mint fee
-     * @dev Only callable by minter
+     * @dev Only callable by admin
      */
-    function setMintFee(uint256 fee) external override onlyMinter {
+    function setMintFee(uint256 fee) external override onlyAdmin whenAdminNotLocked {
         mintFee = fee;
     }
 
     /**
-     * @notice Set the nounders DAO.
-     * @dev Only callable by the nounders DAO when not locked.
-     */
-    function setNoundersDAO(address _noundersDAO) external override onlyNoundersDAO {
-        noundersDAO = _noundersDAO;
-
-        emit NoundersDAOUpdated(_noundersDAO);
-    }
-
-    /**
-     * @notice Set the token minter.
+     * @notice Set the token admin.
      * @dev Only callable by the owner when not locked.
      */
-    function setMinter(address _minter) external override onlyOwner whenMinterNotLocked {
-        minter = _minter;
+    function setAdmin(address _admin) external override onlyOwner whenAdminNotLocked {
+        admin = _admin;
 
-        emit MinterUpdated(_minter);
+        emit AdminUpdated(_admin);
     }
 
     /**
-     * @notice Lock the minter.
+     * @notice Lock the admin.
      * @dev This cannot be reversed and is only callable by the owner when not locked.
      */
-    function lockMinter() external override onlyOwner whenMinterNotLocked {
-        isMinterLocked = true;
+    function lockAdmin() external override onlyOwner whenAdminNotLocked {
+        isAdminLocked = true;
 
-        emit MinterLocked();
-    }
-
-    /**
-     * @notice Set the token URI descriptor.
-     * @dev Only callable by the owner when not locked.
-     */
-    function setDescriptor(INounsDescriptor _descriptor) external override onlyOwner whenDescriptorNotLocked {
-        descriptor = _descriptor;
-
-        emit DescriptorUpdated(_descriptor);
-    }
-
-    /**
-     * @notice Lock the descriptor.
-     * @dev This cannot be reversed and is only callable by the owner when not locked.
-     */
-    function lockDescriptor() external override onlyOwner whenDescriptorNotLocked {
-        isDescriptorLocked = true;
-
-        emit DescriptorLocked();
-    }
-
-    /**
-     * @notice Set the token seeder.
-     * @dev Only callable by the owner when not locked.
-     */
-    function setSeeder(INounsSeeder _seeder) external override onlyOwner whenSeederNotLocked {
-        seeder = _seeder;
-
-        emit SeederUpdated(_seeder);
-    }
-
-    /**
-     * @notice Lock the seeder.
-     * @dev This cannot be reversed and is only callable by the owner when not locked.
-     */
-    function lockSeeder() external override onlyOwner whenSeederNotLocked {
-        isSeederLocked = true;
-
-        emit SeederLocked();
+        emit AdminLocked();
     }
 
     /**

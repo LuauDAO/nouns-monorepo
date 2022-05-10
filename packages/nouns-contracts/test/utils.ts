@@ -60,10 +60,11 @@ export const deployNounsSeeder = async (deployer?: SignerWithAddress): Promise<N
 
 export const deployNounsToken = async (
   deployer?: SignerWithAddress,
-  noundersDAO?: string,
   minter?: string,
   mintFee?: string,
+  maxSupply?: number,
   root?: string,
+  merkleQuantity?: number,
   descriptor?: string,
   seeder?: string,
   proxyRegistryAddress?: string,
@@ -72,10 +73,11 @@ export const deployNounsToken = async (
   const factory = new NounsTokenFactory(signer);
 
   return factory.deploy(
-    noundersDAO || signer.address,
     minter || signer.address,
     ethers.utils.parseEther(mintFee || "0.1"),
+    maxSupply || 1000,
     root || ethers.utils.formatBytes32String(""),
+    merkleQuantity || 0,
     descriptor || (await deployNounsDescriptor(signer)).address,
     seeder || (await deployNounsSeeder(signer)).address,
     proxyRegistryAddress || address(0),
@@ -103,46 +105,6 @@ export const populateDescriptor = async (nounsDescriptor: NounsDescriptor): Prom
     chunkArray(heads, 10).map(chunk => nounsDescriptor.addManyHeads(chunk.map(({ data }) => data))),
     nounsDescriptor.addManyGlasses(glasses.map(({ data }) => data)),
   ]);
-};
-
-/**
- * Return a function used to mint `amount` Nouns on the provided `token`
- * @param token The Nouns ERC721 token
- * @param amount The number of Nouns to mint
- */
-export const MintNouns = (
-  token: NounsToken,
-  burnNoundersTokens = true,
-): ((amount: number) => Promise<void>) => {
-  return async (amount: number): Promise<void> => {
-    for (let i = 0; i < amount; i++) {
-      await token.mint(address(0));
-    }
-    if (!burnNoundersTokens) return;
-
-    await setTotalSupply(token, amount);
-  };
-};
-
-/**
- * Mints or burns tokens to target a total supply. Due to Nounders' rewards tokens may be burned and tokenIds will not be sequential
- */
-export const setTotalSupply = async (token: NounsToken, newTotalSupply: number): Promise<void> => {
-  const totalSupply = (await token.totalSupply()).toNumber();
-
-  if (totalSupply < newTotalSupply) {
-    for (let i = 0; i < newTotalSupply - totalSupply; i++) {
-      await token.mint(address(0));
-    }
-    // If Nounder's reward tokens were minted totalSupply will be more than expected, so run setTotalSupply again to burn extra tokens
-    await setTotalSupply(token, newTotalSupply);
-  }
-
-  if (totalSupply > newTotalSupply) {
-    for (let i = newTotalSupply; i < totalSupply; i++) {
-      await token.burn(i);
-    }
-  }
 };
 
 // The following adapted from `https://github.com/compound-finance/compound-protocol/blob/master/tests/Utils/Ethereum.js`

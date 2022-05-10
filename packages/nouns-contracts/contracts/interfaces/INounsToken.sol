@@ -24,43 +24,23 @@ import { INounsSeeder } from './INounsSeeder.sol';
 interface INounsToken is IERC721 {
     event NounCreated(uint256 indexed tokenId, INounsSeeder.Seed seed);
 
-    event NounBurned(uint256 indexed tokenId);
+    event AdminUpdated(address minter);
 
-    event NoundersDAOUpdated(address noundersDAO);
-
-    event MinterUpdated(address minter);
-
-    event MinterLocked();
-
-    event DescriptorUpdated(INounsDescriptor descriptor);
-
-    event DescriptorLocked();
-
-    event SeederUpdated(INounsSeeder seeder);
-
-    event SeederLocked();
+    event AdminLocked();
 
     function mint(address account) external payable returns (uint256);
+
+    function mintBatch(address account, uint256 quantity) external payable returns (uint256, uint256);
 
     function redeem(address account, bytes32[] calldata proof) external returns (uint256);
 
     function dataURI(uint256 tokenId) external returns (string memory);
 
-    function setRoot(bytes32 merkleRoot) external;
+    function setRoot(bytes32 merkleRoot, uint256 quantity) external;
 
     function setMintFee(uint256 fee) external;
 
-    function setNoundersDAO(address noundersDAO) external;
+    function setAdmin(address minter) external;
 
-    function setMinter(address minter) external;
-
-    function lockMinter() external;
-
-    function setDescriptor(INounsDescriptor descriptor) external;
-
-    function lockDescriptor() external;
-
-    function setSeeder(INounsSeeder seeder) external;
-
-    function lockSeeder() external;
+    function lockAdmin() external;
 }

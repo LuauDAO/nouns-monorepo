@@ -15,18 +15,22 @@ const { expect } = chai;
 describe('NounsToken', () => {
   let nounsToken: NounsToken;
   let deployer: SignerWithAddress;
-  let noundersDAO: SignerWithAddress;
+  let admin: SignerWithAddress;
   let merkleRecipients: SignerWithAddress[];
   let merkleTree: MerkleTree;
+  let merkleQuantity: number;
+  let maxSupply: number;
   let snapshotId: number;
 
   before(async () => {
-    [deployer, noundersDAO] = await ethers.getSigners();
+    [deployer, admin] = await ethers.getSigners();
     merkleRecipients = (await ethers.getSigners()).slice(2, 6);
+    merkleQuantity = merkleRecipients.length;
+    maxSupply = 20;
 
     merkleTree = new MerkleTree(merkleRecipients.map(account => hashAccount(account)), keccack256, {sortPairs: true});
 
-    nounsToken = await deployNounsToken(deployer, noundersDAO.address, deployer.address, "0.1", merkleTree.getHexRoot());
+    nounsToken = await deployNounsToken(deployer, admin.address, "0.1", maxSupply, merkleTree.getHexRoot(), merkleQuantity);
 
     const descriptor = await nounsToken.descriptor();
 
@@ -49,20 +53,76 @@ describe('NounsToken', () => {
     expect(await nounsToken.name()).to.eq('BeachBums');
   });
 
-  it('should set merkle root', async () => {
+  it('should allow admin to set merkle root', async () => {
     const newMerkleTree = new MerkleTree(merkleRecipients.slice(2).map(account => hashAccount(account)), keccack256, {sortPairs: true})
     let oldRoot = await nounsToken.root();
-    await nounsToken.setRoot(newMerkleTree.getHexRoot());
+    await nounsToken.connect(admin).setRoot(newMerkleTree.getHexRoot(), 2);
     let newRoot = await nounsToken.root();
     expect(newRoot).to.not.eq(oldRoot);
     expect(newRoot).to.eq(newMerkleTree.getHexRoot());
   });
 
-  it('should allow minter to mint a noun to itself', async () => {
+  it('should not allow non-admin to set merkle root', async () => {
+    const newMerkleTree = new MerkleTree(merkleRecipients.slice(2).map(account => hashAccount(account)), keccack256, {sortPairs: true})
+    const tx = nounsToken.setRoot(newMerkleTree.getHexRoot(), 2);
+    await expect(tx).to.be.revertedWith('Sender is not the admin')
+  });
+
+  it('should allow to mint a noun to self', async () => {
     const tx = nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()});
     
     await expect(tx).to.emit(nounsToken, 'NounCreated');
     expect(await nounsToken.ownerOf(0)).to.eq(deployer.address);
+  });
+
+  it('should not allow to exceed max supply with public mint', async () => {
+    for(let i = 0; i < maxSupply - merkleQuantity; i++) {
+      await (await nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()})).wait();
+    }
+
+    expect(await nounsToken.totalSupply()).to.eq(maxSupply - merkleQuantity);
+
+    const tx = nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()});
+    
+    await expect(tx).to.be.revertedWith('Max supply reached');
+  });
+
+  it('should not allow to exceed max supply with batch mint', async () => {
+    let [, , minter] = await ethers.getSigners();
+    let quantity = maxSupply - merkleQuantity;
+    const tx = nounsToken.connect(minter).mintBatch(minter.address, quantity, {value: (await nounsToken.mintFee()).mul(quantity)});
+    
+    await expect(tx).to.be.revertedWith('Max supply reached');
+  });
+
+  it('should not allow to exceed max supply with redeem', async () => {
+    for(let i = 0; i < maxSupply - merkleQuantity; i++) {
+      await (await nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()})).wait();
+    }
+
+    for(let i = 0; i < merkleQuantity; i++) {
+      await (await nounsToken.connect(merkleRecipients[i]).redeem(merkleRecipients[i].address, merkleTree.getHexProof(hashAccount(merkleRecipients[i])))).wait();
+    }
+
+    // here we expand the merkle drop after the max supply has already been reached
+    const newRecipients = (await ethers.getSigners()).slice(2, 8);
+    const newMerkleTree = new MerkleTree(newRecipients.map(account => hashAccount(account)), keccack256, {sortPairs: true})
+    await (await nounsToken.connect(admin).setRoot(newMerkleTree.getHexRoot(), newRecipients.length)).wait();
+
+    const tx = nounsToken.redeem(newRecipients[newRecipients.length - 1].address, newMerkleTree.getHexProof(hashAccount(newRecipients[newRecipients.length - 1])));
+    
+    await expect(tx).to.be.revertedWith('Max supply reached');
+  });
+
+  it('should allow to mint batch to self', async () => {
+    let [, , minter] = await ethers.getSigners();
+    let quantity = 10;
+    const tx = nounsToken.connect(minter).mintBatch(minter.address, quantity, {value: (await nounsToken.mintFee()).mul(quantity)});
+
+    for (let i = 0; i < quantity; i++) {
+      await expect(tx).to.emit(nounsToken, 'Transfer').withArgs(deployer.address, minter.address, i);
+      expect(await nounsToken.ownerOf(i)).to.eq(minter.address);
+    }
   });
 
   it('should allow merkle drop recipient to public mint a noun to itself', async () => {
@@ -117,7 +177,7 @@ describe('NounsToken', () => {
 
     await expect(tx).to.be.revertedWith('Invalid proof');
 
-    await (await nounsToken.setRoot(newMerkleTree.getHexRoot())).wait();
+    await (await nounsToken.connect(admin).setRoot(newMerkleTree.getHexRoot(), newRecipients.length)).wait();
 
     const tx2 = nounsToken.connect(recipient).redeem(recipient.address, newMerkleTree.getHexProof(hashAccount(recipient)));
     
@@ -125,21 +185,20 @@ describe('NounsToken', () => {
     expect(await nounsToken.ownerOf(0)).to.eq(recipient.address);
   });
 
-  // it('should emit two transfer logs on mint', async () => {
-  //   const [, , creator, minter] = await ethers.getSigners();
+  it('should emit two transfer logs on mint', async () => {
+    const [, , creator, minter] = await ethers.getSigners();
 
-  //   await (await nounsToken.mint(deployer.address)).wait();
+    await (await nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()})).wait();
 
-  //   await (await nounsToken.setMinter(minter.address)).wait();
-  //   await (await nounsToken.transferOwnership(creator.address)).wait();
+    await (await nounsToken.transferOwnership(creator.address)).wait();
 
-  //   const tx = nounsToken.connect(minter).mint(minter.address);
+    const tx = nounsToken.connect(minter).mint(minter.address, {value: await nounsToken.mintFee()});
 
-  //   await expect(tx)
-  //     .to.emit(nounsToken, 'Transfer')
-  //     .withArgs(constants.AddressZero, creator.address, 2);
-  //   await expect(tx).to.emit(nounsToken, 'Transfer').withArgs(creator.address, minter.address, 2);
-  // });
+    await expect(tx)
+      .to.emit(nounsToken, 'Transfer')
+      .withArgs(constants.AddressZero, creator.address, 1);
+    await expect(tx).to.emit(nounsToken, 'Transfer').withArgs(creator.address, minter.address, 1);
+  });
 
   describe('contractURI', async () => {
     it('should return correct contractURI', async () => {
