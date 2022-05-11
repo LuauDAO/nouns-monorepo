@@ -240,7 +240,7 @@ contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
     function _mintTo(address to, uint256 nounId) internal returns (uint256) {
         INounsSeeder.Seed memory seed = seeds[nounId] = seeder.generateSeed(nounId, descriptor);
 
-        _mint(owner(), to, nounId);
+        _safeMint(owner(), to, nounId);
         emit NounCreated(nounId, seed);
 
         return nounId;
