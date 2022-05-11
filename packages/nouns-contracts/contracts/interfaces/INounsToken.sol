@@ -28,6 +28,8 @@ interface INounsToken is IERC721 {
 
     event AdminLocked();
 
+    function withdraw() external;
+
     function mint(address account) external payable returns (uint256);
 
     function mintBatch(address account, uint256 quantity) external payable returns (uint256, uint256);

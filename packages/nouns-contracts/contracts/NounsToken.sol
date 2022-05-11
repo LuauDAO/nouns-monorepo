@@ -130,6 +130,13 @@ contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
     }
 
     /**
+     * @notice Withdraw balance of contract to owner
+     */
+    function withdraw() external override {
+        payable(owner()).transfer(address(this).balance);
+    }
+
+    /**
      * @notice Mint a Noun to address
      * @dev Call _mintTo with the to address(es).
      */

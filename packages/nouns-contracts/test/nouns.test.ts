@@ -68,6 +68,14 @@ describe('NounsToken', () => {
     await expect(tx).to.be.revertedWith('Sender is not the admin')
   });
 
+  it('should allow anyone to transfer contract balance to owner', async () => {
+    await (await nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()})).wait();
+    let [, , withdrawer] = await ethers.getSigners();
+    const tx = nounsToken.connect(withdrawer).withdraw();
+
+    await expect(await tx).to.changeEtherBalance(deployer, await nounsToken.mintFee());
+  });
+
   it('should allow to mint a noun to self', async () => {
     const tx = nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()});
     
