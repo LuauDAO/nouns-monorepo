@@ -128,7 +128,7 @@ describe('NounsToken', () => {
     const tx = nounsToken.connect(minter).mintBatch(minter.address, quantity, {value: (await nounsToken.mintFee()).mul(quantity)});
 
     for (let i = 0; i < quantity; i++) {
-      await expect(tx).to.emit(nounsToken, 'Transfer').withArgs(deployer.address, minter.address, i);
+      await expect(tx).to.emit(nounsToken, 'Transfer').withArgs(ethers.constants.AddressZero, minter.address, i);
       expect(await nounsToken.ownerOf(i)).to.eq(minter.address);
     }
   });
@@ -191,21 +191,6 @@ describe('NounsToken', () => {
     
     await expect(tx2).to.emit(nounsToken, 'NounCreated');
     expect(await nounsToken.ownerOf(0)).to.eq(recipient.address);
-  });
-
-  it('should emit two transfer logs on mint', async () => {
-    const [, , creator, minter] = await ethers.getSigners();
-
-    await (await nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()})).wait();
-
-    await (await nounsToken.transferOwnership(creator.address)).wait();
-
-    const tx = nounsToken.connect(minter).mint(minter.address, {value: await nounsToken.mintFee()});
-
-    await expect(tx)
-      .to.emit(nounsToken, 'Transfer')
-      .withArgs(constants.AddressZero, creator.address, 1);
-    await expect(tx).to.emit(nounsToken, 'Transfer').withArgs(creator.address, minter.address, 1);
   });
 
   describe('contractURI', async () => {
