@@ -246,7 +246,7 @@ contract NounsDescriptor is INounsDescriptor, Ownable {
     }
 
     /**
-     * @notice Given a token ID and seed, construct a token URI for an official Nouns DAO noun.
+     * @notice Given a token ID and seed, construct a token URI for an official BeachBum.
      * @dev The returned value may be a base64 encoded data URI or an API URL.
      */
     function tokenURI(uint256 tokenId, INounsSeeder.Seed memory seed) external view override returns (string memory) {
@@ -257,12 +257,14 @@ contract NounsDescriptor is INounsDescriptor, Ownable {
     }
 
     /**
-     * @notice Given a token ID and seed, construct a base64 encoded data URI for an official Nouns DAO noun.
+     * @notice Given a token ID and seed, construct a base64 encoded data URI for an official BeachBum.
      */
     function dataURI(uint256 tokenId, INounsSeeder.Seed memory seed) public view override returns (string memory) {
         string memory nounId = tokenId.toString();
-        string memory name = string(abi.encodePacked('Noun ', nounId));
-        string memory description = string(abi.encodePacked('Noun ', nounId, ' is a member of the Nouns DAO'));
+        string memory name = string(abi.encodePacked('BeachBum ', nounId));
+        string memory description = string(
+            abi.encodePacked('BeachBum ', nounId, ' is an attendee or supporter of Hodlercon')
+        );
 
         return genericDataURI(name, description, seed);
     }
