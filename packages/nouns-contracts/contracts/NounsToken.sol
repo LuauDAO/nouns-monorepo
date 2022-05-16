@@ -283,13 +283,13 @@ contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
     }
 
     /**
-     * @notice Mint a Noun with `nounId` to the provided `to` address.
+     * @notice Mint a BeachBum with `nounId` to the provided `to` address.
      */
     function _mintTo(address to, uint256 nounId) internal returns (uint256) {
         INounsSeeder.Seed memory seed = seeds[nounId] = seeder.generateSeed(nounId, descriptor);
 
         _safeMint(to, nounId);
-        emit NounCreated(nounId, seed);
+        emit BeachBumCreated(nounId, seed);
 
         return nounId;
     }

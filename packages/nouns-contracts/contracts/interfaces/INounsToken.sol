@@ -23,7 +23,7 @@ import { INounsDescriptor } from './INounsDescriptor.sol';
 import { INounsSeeder } from './INounsSeeder.sol';
 
 interface INounsToken is IERC721, IERC2981 {
-    event NounCreated(uint256 indexed tokenId, INounsSeeder.Seed seed);
+    event BeachBumCreated(uint256 indexed tokenId, INounsSeeder.Seed seed);
 
     event AdminUpdated(address minter);
 
