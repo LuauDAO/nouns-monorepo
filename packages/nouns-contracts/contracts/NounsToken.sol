@@ -82,7 +82,7 @@ contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
      * @notice Require that the mint is enabled
      */
     modifier mintEnabled() {
-        require(!isMintEnabled, 'Mint is disabled');
+        require(isMintEnabled, 'Mint is disabled');
         _;
     }
 

@@ -37,6 +37,7 @@ describe('NounsToken', () => {
 
     wethContract = await deployWeth();
     nounsToken = await deployNounsToken(deployer, admin.address, mintFee.toString(), royaltyBasis, maxSupply, merkleTree.getHexRoot(), merkleQuantity);
+    await nounsToken.toggleMint();
 
     const descriptor = await nounsToken.descriptor();
 
