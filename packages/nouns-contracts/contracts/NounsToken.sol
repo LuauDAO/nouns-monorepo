@@ -1,19 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0
 
-/// @title The Nouns ERC-721 token
+/// @title The BeachBum ERC-721 token
 
-/*********************************
- * ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ *
- * ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ *
- * ░░░░░░█████████░░█████████░░░ *
- * ░░░░░░██░░░████░░██░░░████░░░ *
- * ░░██████░░░████████░░░████░░░ *
- * ░░██░░██░░░████░░██░░░████░░░ *
- * ░░██░░██░░░████░░██░░░████░░░ *
- * ░░░░░░█████████░░█████████░░░ *
- * ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ *
- * ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ *
- *********************************/
+// NounsToken.sol modifies Nouns NounsToken.sol:
+// https://github.com/nounsDAO/nouns-monorepo/blob/076cd753307632ce8efeb65a07f1bd797a5ecb4d/packages/nouns-contracts/contracts/NounsToken.sol
+//
+// MODIFICATIONS:
+// Stripped of all DAO-related functionality, added Merkle Drop, public mint, and royalty.
 
 pragma solidity ^0.8.6;
 
@@ -21,6 +14,7 @@ import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
 import { ERC721 } from '@openzeppelin/contracts/token/ERC721/ERC721.sol';
 import { ERC721Enumerable } from '@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol';
 import { IERC721 } from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
+import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/utils/cryptography/MerkleProof.sol';
 import { INounsDescriptor } from './interfaces/INounsDescriptor.sol';
 import { INounsSeeder } from './interfaces/INounsSeeder.sol';
@@ -33,6 +27,9 @@ contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
 
     // Mint fee
     uint256 public mintFee;
+
+    // Royalty basis
+    uint256 public royaltyBasis;
 
     // Max supply
     uint256 public immutable maxSupply;
@@ -55,6 +52,9 @@ contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
     // Whether the admin can be updated
     bool public isAdminLocked;
 
+    // Whether the public mint is enabled
+    bool public isMintEnabled;
+
     // The noun seeds
     mapping(uint256 => INounsSeeder.Seed) public seeds;
 
@@ -68,24 +68,28 @@ contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
     IProxyRegistry public immutable proxyRegistry;
 
     /**
-     * @notice Require that the admin has not been locked.
+     * @notice Require that the sender is the admin.
      */
-    modifier whenAdminNotLocked() {
-        require(!isAdminLocked, 'Admin is locked');
+    modifier onlyAdminOrOwner() {
+        require(
+            ((msg.sender == admin) && !isAdminLocked) || (msg.sender == owner()),
+            'Sender is not the owner or admin'
+        );
         _;
     }
 
     /**
-     * @notice Require that the sender is the admin.
+     * @notice Require that the mint is enabled
      */
-    modifier onlyAdmin() {
-        require(msg.sender == admin, 'Sender is not the admin');
+    modifier mintEnabled() {
+        require(!isMintEnabled, 'Mint is disabled');
         _;
     }
 
     constructor(
         address _admin,
         uint256 _mintFee,
+        uint256 _royaltyBasis,
         uint256 _maxSupply,
         bytes32 _root,
         uint256 _merkleQuantity,
@@ -95,6 +99,7 @@ contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
     ) ERC721('BeachBums', 'BUMS') {
         admin = _admin;
         mintFee = _mintFee;
+        royaltyBasis = _royaltyBasis;
         maxSupply = _maxSupply;
         root = _root;
         merkleQuantity = _merkleQuantity;
@@ -130,17 +135,37 @@ contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
     }
 
     /**
+     * @dev Returns how much royalty is owed and to whom, based on a sale price that may be denominated in any unit of
+     * exchange. The royalty amount is denominated and should be payed in that same unit of exchange.
+     */
+    function royaltyInfo(uint256, uint256 salePrice)
+        external
+        view
+        override
+        returns (address receiver, uint256 royaltyAmount)
+    {
+        return (address(this), ((salePrice * royaltyBasis) / 10000));
+    }
+
+    /**
      * @notice Withdraw balance of contract to owner
      */
-    function withdraw() external override {
+    function withdraw() external override onlyOwner {
         payable(owner()).transfer(address(this).balance);
+    }
+
+    /**
+     * @notice Withdraw ERC20 balance of contract to owner
+     */
+    function withdrawERC20Balance(address erc20ContractAddress) external override onlyOwner {
+        IERC20(erc20ContractAddress).transfer(owner(), IERC20(erc20ContractAddress).balanceOf(address(this)));
     }
 
     /**
      * @notice Mint a Noun to address
      * @dev Call _mintTo with the to address(es).
      */
-    function mint(address account) public payable override returns (uint256) {
+    function mint(address account) public payable override mintEnabled returns (uint256) {
         require(msg.value >= mintFee, 'Insufficient mint fee');
         require(_currentNounId + merkleQuantity < maxSupply, 'Max supply reached');
         return _mintTo(account, _currentNounId++);
@@ -150,7 +175,13 @@ contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
      * @notice Mint multiple Nouns to address
      * @dev Call _mintTo with the to address(es).
      */
-    function mintBatch(address account, uint256 quantity) public payable override returns (uint256, uint256) {
+    function mintBatch(address account, uint256 quantity)
+        public
+        payable
+        override
+        mintEnabled
+        returns (uint256, uint256)
+    {
         require(msg.value >= mintFee * quantity, 'Insufficient mint fee');
         require(_currentNounId + quantity + merkleQuantity < maxSupply, 'Max supply reached');
         uint256 startId = _currentNounId;
@@ -199,26 +230,43 @@ contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
 
     /**
      * @notice Set merkle root
-     * @dev Only callable by admin
+     * @dev Only callable by admin or owner
      */
-    function setRoot(bytes32 merkleRoot, uint256 quantity) external override onlyAdmin whenAdminNotLocked {
+    function setRoot(bytes32 merkleRoot, uint256 quantity) external override onlyAdminOrOwner {
         root = merkleRoot;
         merkleQuantity = quantity;
     }
 
     /**
      * @notice Set mint fee
-     * @dev Only callable by admin
+     * @dev Only callable by admin or owner
      */
-    function setMintFee(uint256 fee) external override onlyAdmin whenAdminNotLocked {
+    function setMintFee(uint256 fee) external override onlyAdminOrOwner {
         mintFee = fee;
+    }
+
+    /**
+     * @notice Set mint fee
+     * @dev Only callable by admin or owner
+     */
+    function toggleMint() external override onlyAdminOrOwner {
+        isMintEnabled = !isMintEnabled;
+    }
+
+    /**
+     * @notice Set royalty basis
+     * @dev Only callable by admin or owner
+     */
+    function setRoyalty(uint256 _royaltyBasis) external override onlyAdminOrOwner {
+        require(_royaltyBasis <= 10000, 'Royalty cannot exceed 100%');
+        royaltyBasis = _royaltyBasis;
     }
 
     /**
      * @notice Set the token admin.
      * @dev Only callable by the owner when not locked.
      */
-    function setAdmin(address _admin) external override onlyOwner whenAdminNotLocked {
+    function setAdmin(address _admin) external override onlyOwner {
         admin = _admin;
 
         emit AdminUpdated(_admin);
@@ -228,7 +276,7 @@ contract NounsToken is INounsToken, Ownable, ERC721Enumerable {
      * @notice Lock the admin.
      * @dev This cannot be reversed and is only callable by the owner when not locked.
      */
-    function lockAdmin() external override onlyOwner whenAdminNotLocked {
+    function lockAdmin() external override onlyOwner {
         isAdminLocked = true;
 
         emit AdminLocked();

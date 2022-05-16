@@ -13,6 +13,11 @@
       },
       {
         "internalType": "uint256",
+        "name": "_royaltyBasis",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
         "name": "_maxSupply",
         "type": "uint256"
       },
@@ -357,6 +362,19 @@
   },
   {
     "inputs": [],
+    "name": "isMintEnabled",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "lockAdmin",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -552,6 +570,48 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "royaltyBasis",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "salePrice",
+        "type": "uint256"
+      }
+    ],
+    "name": "royaltyInfo",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "receiver",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "royaltyAmount",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -732,6 +792,19 @@
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "_royaltyBasis",
+        "type": "uint256"
+      }
+    ],
+    "name": "setRoyalty",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "bytes4",
         "name": "interfaceId",
         "type": "bytes4"
@@ -759,6 +832,13 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "toggleMint",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -875,6 +955,19 @@
   {
     "inputs": [],
     "name": "withdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "erc20ContractAddress",
+        "type": "address"
+      }
+    ],
+    "name": "withdrawERC20Balance",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

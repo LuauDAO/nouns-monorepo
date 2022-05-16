@@ -18,6 +18,7 @@ interface Contract {
 
 task('deploy-local', 'Deploy contracts to hardhat')
   .addOptionalParam('mintFee', 'Mint Fee')
+  .addOptionalParam('royaltyBasis', 'Royalty basis')
   .addOptionalParam('maxSupply', 'Max supply')
   .addOptionalParam('merkleQuantity', 'Quantity reserved for merkle drop')
   .setAction(async (args, { ethers }) => {
@@ -44,6 +45,7 @@ task('deploy-local', 'Deploy contracts to hardhat')
         args: [
           deployer.address,
           ethers.utils.parseEther(args.mintFee || "0.1"),
+          args.royaltyBasis || 0,
           args.maxSupply || 1024,
           ethers.utils.formatBytes32String(""),
           args.merkleQuantity || 0,

@@ -62,6 +62,7 @@ export const deployNounsToken = async (
   deployer?: SignerWithAddress,
   minter?: string,
   mintFee?: string,
+  royaltyBasis?: number,
   maxSupply?: number,
   root?: string,
   merkleQuantity?: number,
@@ -75,6 +76,7 @@ export const deployNounsToken = async (
   return factory.deploy(
     minter || signer.address,
     ethers.utils.parseEther(mintFee || "0.1"),
+    royaltyBasis || 0,
     maxSupply || 1000,
     root || ethers.utils.formatBytes32String(""),
     merkleQuantity || 0,

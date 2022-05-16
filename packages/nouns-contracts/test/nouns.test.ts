@@ -2,8 +2,8 @@ import chai from 'chai';
 import { ethers } from 'hardhat';
 import { BigNumber as EthersBN, constants } from 'ethers';
 import { solidity } from 'ethereum-waffle';
-import { NounsDescriptor__factory as NounsDescriptorFactory, NounsToken } from '../typechain';
-import { deployNounsToken, populateDescriptor, hashAccount } from './utils';
+import { NounsDescriptor__factory as NounsDescriptorFactory, NounsToken, Weth } from '../typechain';
+import { deployNounsToken, populateDescriptor, hashAccount, deployWeth } from './utils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { override } from 'prompt';
 import { MerkleTree } from 'merkletreejs';
@@ -14,8 +14,11 @@ const { expect } = chai;
 
 describe('NounsToken', () => {
   let nounsToken: NounsToken;
+  let wethContract: Weth;
   let deployer: SignerWithAddress;
   let admin: SignerWithAddress;
+  let mintFee: number;
+  let royaltyBasis: number;
   let merkleRecipients: SignerWithAddress[];
   let merkleTree: MerkleTree;
   let merkleQuantity: number;
@@ -27,10 +30,13 @@ describe('NounsToken', () => {
     merkleRecipients = (await ethers.getSigners()).slice(2, 6);
     merkleQuantity = merkleRecipients.length;
     maxSupply = 20;
+    mintFee = 0.1;
+    royaltyBasis = 100;
 
     merkleTree = new MerkleTree(merkleRecipients.map(account => hashAccount(account)), keccack256, {sortPairs: true});
 
-    nounsToken = await deployNounsToken(deployer, admin.address, "0.1", maxSupply, merkleTree.getHexRoot(), merkleQuantity);
+    wethContract = await deployWeth();
+    nounsToken = await deployNounsToken(deployer, admin.address, mintFee.toString(), royaltyBasis, maxSupply, merkleTree.getHexRoot(), merkleQuantity);
 
     const descriptor = await nounsToken.descriptor();
 
@@ -64,16 +70,40 @@ describe('NounsToken', () => {
 
   it('should not allow non-admin to set merkle root', async () => {
     const newMerkleTree = new MerkleTree(merkleRecipients.slice(2).map(account => hashAccount(account)), keccack256, {sortPairs: true})
-    const tx = nounsToken.setRoot(newMerkleTree.getHexRoot(), 2);
-    await expect(tx).to.be.revertedWith('Sender is not the admin')
+    let [, , non_admin] = await ethers.getSigners();
+    const tx = nounsToken.connect(non_admin).setRoot(newMerkleTree.getHexRoot(), 2);
+    await expect(tx).to.be.revertedWith('Sender is not the owner or admin')
   });
 
-  it('should allow anyone to transfer contract balance to owner', async () => {
+  it('should allow admin to set mint fee', async () => {
+    const tx = await nounsToken.connect(admin).setMintFee(ethers.constants.WeiPerEther.mul(2));
+    await expect(await nounsToken.mintFee()).to.eq(ethers.constants.WeiPerEther.mul(2));
+  });
+
+  it('should allow owner to withdraw contract balance', async () => {
+    await (await nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()})).wait();
+    const tx = nounsToken.withdraw();
+
+    await expect(await tx).to.changeEtherBalance(deployer, await nounsToken.mintFee());
+  });
+
+  it('should allow owner to withdraw contract weth balance', async () => {
+    let [,sender] = await ethers.getSigners();
+    await (await (wethContract.connect(sender).deposit({ value: 1 }))).wait();
+    await (await wethContract.connect(sender).transfer(nounsToken.address, 1)).wait();
+
+    await expect(await wethContract.balanceOf(deployer.address)).to.eq(0);
+    const tx = await nounsToken.withdrawERC20Balance(wethContract.address);
+
+    await expect(await wethContract.balanceOf(deployer.address)).to.eq(1);
+  });
+
+  it('should not allow non-owner to withdraw contract balance', async () => {
     await (await nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()})).wait();
     let [, , withdrawer] = await ethers.getSigners();
     const tx = nounsToken.connect(withdrawer).withdraw();
 
-    await expect(await tx).to.changeEtherBalance(deployer, await nounsToken.mintFee());
+    await expect(tx).to.be.revertedWith('Ownable: caller is not the owner');
   });
 
   it('should allow to mint a noun to self', async () => {
@@ -81,6 +111,13 @@ describe('NounsToken', () => {
     
     await expect(tx).to.emit(nounsToken, 'NounCreated');
     expect(await nounsToken.ownerOf(0)).to.eq(deployer.address);
+  });
+
+  it('should not allow to mint a noun to self if disabled', async () => {
+    await (await (nounsToken.toggleMint())).wait();
+    const tx = nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()});
+    
+    await expect(tx).to.be.revertedWith('Mint is disabled');
   });
 
   it('should not allow to exceed max supply with public mint', async () => {

@@ -21,6 +21,9 @@ interface Contract {
 
 task('deploy', 'Deploys NFTDescriptor, NounsDescriptor, NounsSeeder, and NounsToken')
   .addParam('weth', 'The WETH contract address', undefined, types.string)
+  .addOptionalParam('mintFee', 'Mint Fee')
+  .addOptionalParam('maxSupply', 'Max supply')
+  .addOptionalParam('merkleQuantity', 'Quantity reserved for merkle drop')
   .setAction(async (args, { ethers }) => {
     const network = await ethers.provider.getNetwork();
     const proxyRegistryAddress =
@@ -40,7 +43,11 @@ task('deploy', 'Deploys NFTDescriptor, NounsDescriptor, NounsSeeder, and NounsTo
       NounsSeeder: {},
       NounsToken: {
         args: [
-          args.noundersdao,
+          deployer.address,
+          ethers.utils.parseEther(args.mintFee || "0.1"),
+          args.maxSupply || 1024,
+          ethers.utils.formatBytes32String(""),
+          args.merkleQuantity || 0,
           () => contracts['NounsDescriptor'].address,
           () => contracts['NounsSeeder'].address,
           proxyRegistryAddress,
@@ -53,11 +60,13 @@ task('deploy', 'Deploys NFTDescriptor, NounsDescriptor, NounsSeeder, and NounsTo
 
     promptjs.start();
 
+    console.log(network.name);
+
     let result = await promptjs.get([
       {
         properties: {
           gasPrice: {
-            type: 'integer',
+            type: 'number',
             required: true,
             description: 'Enter a gas price (gwei)',
             default: gasInGwei,
@@ -114,6 +123,8 @@ task('deploy', 'Deploys NFTDescriptor, NounsDescriptor, NounsSeeder, and NounsTo
           gasPrice,
         },
       );
+
+      console.log(deployedContract.deployTransaction.hash);
 
       if (contract.waitForConfirmation) {
         await deployedContract.deployed();
