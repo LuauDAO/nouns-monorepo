@@ -8,3 +8,4 @@ export * from './run-local';
 export * from './verify-etherscan';
 export * from './set-mint-fee';
 export * from './set-merkle';
+export * from './toggle-mint';
