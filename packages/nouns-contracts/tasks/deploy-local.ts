@@ -46,7 +46,7 @@ task('deploy-local', 'Deploy contracts to hardhat')
           deployer.address,
           ethers.utils.parseEther(args.mintFee || "0.1"),
           args.royaltyBasis || 0,
-          args.maxSupply || 1024,
+          args.maxSupply || 700,
           ethers.utils.formatBytes32String(""),
           args.merkleQuantity || 0,
           () => contracts['NounsDescriptor'].instance?.address,
