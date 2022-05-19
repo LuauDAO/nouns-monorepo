@@ -110,7 +110,7 @@ describe('NounsToken', () => {
   it('should allow to mint a noun to self', async () => {
     const tx = nounsToken.mint(deployer.address, {value: await nounsToken.mintFee()});
     
-    await expect(tx).to.emit(nounsToken, 'NounCreated');
+    await expect(tx).to.emit(nounsToken, 'BeachBumCreated');
     expect(await nounsToken.ownerOf(0)).to.eq(deployer.address);
   });
 
@@ -178,7 +178,7 @@ describe('NounsToken', () => {
 
     const tx = nounsToken.connect(recipient).mint(recipient.address, {value: await nounsToken.mintFee()});
     
-    await expect(tx).to.emit(nounsToken, 'NounCreated');
+    await expect(tx).to.emit(nounsToken, 'BeachBumCreated');
     expect(await nounsToken.ownerOf(1)).to.eq(recipient.address);
   });
 
@@ -186,7 +186,7 @@ describe('NounsToken', () => {
     const recipient = merkleRecipients[0];
     const tx = nounsToken.connect(recipient).redeem(recipient.address, merkleTree.getHexProof(hashAccount(recipient)));
     
-    await expect(tx).to.emit(nounsToken, 'NounCreated');
+    await expect(tx).to.emit(nounsToken, 'BeachBumCreated');
     expect(await nounsToken.ownerOf(0)).to.eq(recipient.address);
   });
 
@@ -202,7 +202,7 @@ describe('NounsToken', () => {
     const recipient = merkleRecipients[0];
     const tx = nounsToken.connect(recipient).redeem(recipient.address, merkleTree.getHexProof(hashAccount(recipient)));
     
-    await expect(tx).to.emit(nounsToken, 'NounCreated');
+    await expect(tx).to.emit(nounsToken, 'BeachBumCreated');
     expect(await nounsToken.ownerOf(0)).to.eq(recipient.address);
 
     const tx2 = nounsToken.connect(recipient).redeem(recipient.address, merkleTree.getHexProof(hashAccount(recipient)));
@@ -227,14 +227,14 @@ describe('NounsToken', () => {
 
     const tx2 = nounsToken.connect(recipient).redeem(recipient.address, newMerkleTree.getHexProof(hashAccount(recipient)));
     
-    await expect(tx2).to.emit(nounsToken, 'NounCreated');
+    await expect(tx2).to.emit(nounsToken, 'BeachBumCreated');
     expect(await nounsToken.ownerOf(0)).to.eq(recipient.address);
   });
 
   describe('contractURI', async () => {
     it('should return correct contractURI', async () => {
       expect(await nounsToken.contractURI()).to.eq(
-        'ipfs://QmZi1n79FqWt2tTLwCqiy6nLM6xLGRsEPQ5JmReJQKNNzX',
+        'ipfs://bafkreia6f76hnnnmnjdawhelgy7sojfr6bcctd5cy6bsnlnsq777tviedi',
       );
     });
     it('should allow owner to set contractURI', async () => {
