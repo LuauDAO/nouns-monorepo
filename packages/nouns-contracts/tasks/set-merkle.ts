@@ -1,5 +1,5 @@
 import { task, types } from 'hardhat/config';
-import recipients from '../files/merkle_recipients.json';
+import recipients from '../files/recipients.json';
 import { MerkleTree } from 'merkletreejs';
 import keccack256 from 'keccak256';
 import { ethers } from 'hardhat';
