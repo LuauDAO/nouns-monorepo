@@ -79,15 +79,15 @@ describe('NounsDescriptor', () => {
         'ascii',
       ),
     );
-    expect(name).to.equal('Noun 0');
-    expect(description).to.equal('Noun 0 is a member of the Nouns DAO');
+    expect(name).to.equal('BeachBum 0');
+    expect(description).to.equal('BeachBum 0 is an attendee or supporter of Hodlercon');
     expect(image).to.not.be.undefined;
   });
 
   // Unskip this test to validate the encoding of all parts. It ensures that no parts revert when building the token URI.
   // This test also outputs a parts.html file, which can be visually inspected.
   // Note that this test takes a long time to run. You must increase the mocha timeout to a large number.
-  it.skip('should generate valid token uri metadata for all supported parts when data uris are enabled', async () => {
+  it('should generate valid token uri metadata for all supported parts when data uris are enabled', async () => {
     console.log('Running... this may take a little while...');
 
     const { bgcolors, images } = ImageData;
@@ -106,8 +106,8 @@ describe('NounsDescriptor', () => {
           'ascii',
         ),
       );
-      expect(name).to.equal(`Noun ${i}`);
-      expect(description).to.equal(`Noun ${i} is a member of the Nouns DAO`);
+      expect(name).to.equal(`BeachBum ${i}`);
+      expect(description).to.equal(`BeachBum ${i} is an attendee or supporter of Hodlercon`);
       expect(image).to.not.be.undefined;
 
       appendFileSync(

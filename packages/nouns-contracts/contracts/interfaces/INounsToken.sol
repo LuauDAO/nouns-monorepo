@@ -18,45 +18,38 @@
 pragma solidity ^0.8.6;
 
 import { IERC721 } from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
+import { IERC2981 } from '@openzeppelin/contracts/interfaces/IERC2981.sol';
 import { INounsDescriptor } from './INounsDescriptor.sol';
 import { INounsSeeder } from './INounsSeeder.sol';
 
-interface INounsToken is IERC721 {
-    event NounCreated(uint256 indexed tokenId, INounsSeeder.Seed seed);
+interface INounsToken is IERC721, IERC2981 {
+    event BeachBumCreated(uint256 indexed tokenId, INounsSeeder.Seed seed);
 
-    event NounBurned(uint256 indexed tokenId);
+    event AdminUpdated(address minter);
 
-    event NoundersDAOUpdated(address noundersDAO);
+    event AdminLocked();
 
-    event MinterUpdated(address minter);
+    function withdraw() external;
 
-    event MinterLocked();
+    function withdrawERC20Balance(address erc20ContractAddress) external;
 
-    event DescriptorUpdated(INounsDescriptor descriptor);
+    function mint(address account) external payable returns (uint256);
 
-    event DescriptorLocked();
+    function mintBatch(address account, uint256 quantity) external payable returns (uint256, uint256);
 
-    event SeederUpdated(INounsSeeder seeder);
-
-    event SeederLocked();
-
-    function mint() external returns (uint256);
-
-    function burn(uint256 tokenId) external;
+    function redeem(address account, bytes32[] calldata proof) external returns (uint256);
 
     function dataURI(uint256 tokenId) external returns (string memory);
 
-    function setNoundersDAO(address noundersDAO) external;
+    function setRoot(bytes32 merkleRoot, uint256 quantity) external;
 
-    function setMinter(address minter) external;
+    function setMintFee(uint256 fee) external;
 
-    function lockMinter() external;
+    function toggleMint() external;
 
-    function setDescriptor(INounsDescriptor descriptor) external;
+    function setAdmin(address minter) external;
 
-    function lockDescriptor() external;
+    function setRoyalty(uint256 royaltyBasis) external;
 
-    function setSeeder(INounsSeeder seeder) external;
-
-    function lockSeeder() external;
+    function lockAdmin() external;
 }

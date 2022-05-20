@@ -1,8 +1,8 @@
 {
-  "name": "Nouns",
-  "description": "One Noun, every day, forever.\r\n\r\nnouns.wtf",
-  "image": "ipfs://QmNdUibRHNqX2byJLtCD3ofn65cfCtvXdQnV87wRjqWf96",
-  "external_link": "https://nouns.wtf",
+  "name": "BeachBums",
+  "description": "Hodlercon Beachbums, Let's sit on a beach somewhere.\r\n\r\nhodlercon.com",
+  "image": "ipfs://bafkreiglckmtwvyaxsx3ekqwt5awxvmnfq5g2osgl5sq2wgehj5rxz7cje",
+  "external_link": "https://hodlercon.com",
   "seller_fee_basis_points": 0,
   "fee_recipient": "0x0000000000000000000000000000000000000000"
 }
