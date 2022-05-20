@@ -37,6 +37,9 @@ task(
 
   await ethers.provider.send('evm_setIntervalMining', [12_000]);
 
+  await run('toggle-mint', { nounsToken: contracts.NounsToken.instance.address });
+  await run('set-merkle', { nounsToken: contracts.NounsToken.instance.address });
+
   await new Promise(() => {
     /* keep node alive until this process is killed */
   });
