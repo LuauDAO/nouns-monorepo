@@ -3,6 +3,6 @@
   "description": "Hodlercon Beachbums, Let's sit on a beach somewhere.\r\n\r\nhodlercon.com",
   "image": "ipfs://bafkreiglckmtwvyaxsx3ekqwt5awxvmnfq5g2osgl5sq2wgehj5rxz7cje",
   "external_link": "https://hodlercon.com",
-  "seller_fee_basis_points": 0,
-  "fee_recipient": "0x0000000000000000000000000000000000000000"
+  "seller_fee_basis_points": 500,
+  "fee_recipient": "0x4B7e11d39DADc2ba05581BE382F9C07785C68eaB"
 }
